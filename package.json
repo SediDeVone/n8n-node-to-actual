@@ -1,0 +1,42 @@
+{
+  "name": "n8n-nodes-actual",
+  "version": "0.1.0",
+  "description": "Custom n8n node to post transactions to Actual Budget via @actual-app/api",
+  "keywords": [
+    "n8n-nodes",
+    "n8n",
+    "actual",
+    "budget"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
+  },
+  "n8n": {
+    "nodes": [
+      "dist/nodes/Actual/Actual.node.js"
+    ],
+    "credentials": [
+      "dist/credentials/ActualApi.credentials.js"
+    ]
+  },
+  "dependencies": {
+    "@actual-app/api": "^24.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "n8n-workflow": "^1.53.0",
+    "typescript": "^5.4.0"
+  }
+}
