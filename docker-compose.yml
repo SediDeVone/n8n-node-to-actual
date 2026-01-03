@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  actual-rest:
+    build: .
+    container_name: actual-rest
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - ACTUAL_SERVER_URL=${ACTUAL_SERVER_URL}
+      - ACTUAL_PASSWORD=${ACTUAL_PASSWORD}
+    restart: unless-stopped
