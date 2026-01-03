@@ -13,6 +13,7 @@
   "include": [
     "nodes/**/*.ts",
     "credentials/**/*.ts",
-    "index.ts"
+    "index.ts",
+    "src/**/*.ts"
   ]
 }

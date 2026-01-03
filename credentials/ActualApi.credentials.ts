@@ -11,8 +11,8 @@ export class ActualApi implements ICredentialType {
       name: 'url',
       type: 'string',
       default: '',
-      placeholder: 'https://your-actual-server/api',
-      description: 'Actual server API URL (e.g. https://host:port/api)'
+      placeholder: 'https://your-actual-server',
+      description: 'Actual server base URL (e.g. https://actual.example.com) - do not include /api'
     },
     {
       displayName: 'Password',
