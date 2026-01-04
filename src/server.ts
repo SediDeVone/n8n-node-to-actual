@@ -4,7 +4,7 @@ import express, { Request, Response, NextFunction } from 'express';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const actual: any = require('@actual-app/api');
 
-const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
+const PORT = process.env.PORT ? Number(process.env.PORT) : 7006;
 
 // Normalize the server URL - remove trailing /api or /api/ if present
 // The @actual-app/api library expects the base URL and appends paths like /account/login internally

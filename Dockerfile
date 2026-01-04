@@ -15,7 +15,7 @@ COPY credentials ./credentials
 
 RUN npm run build
 
-EXPOSE 3000
+EXPOSE 7006
 
 ENV NODE_ENV=production
 

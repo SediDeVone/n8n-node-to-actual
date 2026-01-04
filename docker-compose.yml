@@ -4,9 +4,9 @@ services:
     build: .
     container_name: actual-rest
     ports:
-      - "3000:3000"
+      - "7006:7006"
     environment:
-      - PORT=3000
+      - PORT=7006
       - ACTUAL_SERVER_URL=${ACTUAL_SERVER_URL}
       - ACTUAL_PASSWORD=${ACTUAL_PASSWORD}
     restart: unless-stopped
