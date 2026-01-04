@@ -261,10 +261,32 @@ app.post('/budgets/:budgetId/transactions', async (req: Request, res: Response, 
         return copy;
       });
 
-      dlog('addTransactions() sending', Array.isArray(normalized) ? normalized.length : 'non-array');
-      const resp = await actual.addTransactions(normalized);
-      dlog('addTransactions() response', Array.isArray(resp) ? resp.length : typeof resp);
-      return resp;
+      // Group transactions by account ID since addTransactions requires accountId as first param
+      // The API signature is: addTransactions(accountId, transactions, options)
+      const byAccount: Record<string, any[]> = {};
+      for (const tx of normalized) {
+        const accountId = tx.account;
+        if (!accountId) {
+          throw Object.assign(new Error('Each transaction must have an "account" field'), { status: 400 });
+        }
+        if (!byAccount[accountId]) {
+          byAccount[accountId] = [];
+        }
+        byAccount[accountId].push(tx);
+      }
+
+      const allResults: string[] = [];
+      for (const [accountId, txs] of Object.entries(byAccount)) {
+        dlog('addTransactions() sending', txs.length, 'transactions to account', accountId);
+        const resp = await actual.addTransactions(accountId, txs);
+        dlog('addTransactions() response', Array.isArray(resp) ? resp.length : typeof resp);
+        if (Array.isArray(resp)) {
+          allResults.push(...resp);
+        } else if (resp) {
+          allResults.push(resp);
+        }
+      }
+      return allResults;
     });
 
     res.status(201).json({ result: created });
