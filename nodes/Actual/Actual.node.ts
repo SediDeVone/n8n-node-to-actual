@@ -223,7 +223,6 @@ export class Actual implements INodeType {
           }
 
           const tx: any = {
-            account: accountId,
             date,
             amount,
           };
@@ -234,12 +233,22 @@ export class Actual implements INodeType {
           return tx;
         });
 
-        if (typeof actual.addTransactions !== 'function') {
-          throw new Error('addTransactions is not available on @actual-app/api');
+        // Use importTransactions for deduplication support (it uses reconcileTransactions internally)
+        // Fall back to addTransactions if importTransactions is not available
+        const useImport = typeof actual.importTransactions === 'function';
+        if (!useImport && typeof actual.addTransactions !== 'function') {
+          throw new Error('Neither importTransactions nor addTransactions available on @actual-app/api');
         }
 
-        const resp = await actual.addTransactions(transactions);
-        return resp;
+        if (useImport) {
+          // importTransactions handles deduplication via imported_id
+          const resp = await actual.importTransactions(accountId, transactions);
+          return resp;
+        } else {
+          // Fallback to addTransactions (no deduplication)
+          const resp = await actual.addTransactions(accountId, transactions);
+          return resp;
+        }
       });
 
       const returnData: INodeExecutionData[] = [

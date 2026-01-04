@@ -248,23 +248,16 @@ app.post('/budgets/:budgetId/transactions', async (req: Request, res: Response, 
     }
 
     const created = await withBudget(budgetId, async () => {
-      if (typeof actual.addTransactions !== 'function') {
-        throw Object.assign(new Error('addTransactions not available on @actual-app/api'), { status: 500 });
+      // Use importTransactions for deduplication support (it uses reconcileTransactions internally)
+      // Fall back to addTransactions if importTransactions is not available
+      const useImport = typeof actual.importTransactions === 'function';
+      if (!useImport && typeof actual.addTransactions !== 'function') {
+        throw Object.assign(new Error('Neither importTransactions nor addTransactions available on @actual-app/api'), { status: 500 });
       }
 
-      // Normalize amounts to milliunits if caller sent decimal numbers
-      const normalized = transactions.map((tx: any) => {
-        const copy: any = { ...tx };
-        if (typeof copy.amount === 'number' || typeof copy.amount === 'string') {
-          copy.amount = toMilliunits(copy.amount);
-        }
-        return copy;
-      });
-
-      // Group transactions by account ID since addTransactions requires accountId as first param
-      // The API signature is: addTransactions(accountId, transactions, options)
+      // Group transactions by account ID since both methods require accountId as first param
       const byAccount: Record<string, any[]> = {};
-      for (const tx of normalized) {
+      for (const tx of transactions) {
         const accountId = tx.account;
         if (!accountId) {
           throw Object.assign(new Error('Each transaction must have an "account" field'), { status: 400 });
@@ -272,18 +265,44 @@ app.post('/budgets/:budgetId/transactions', async (req: Request, res: Response, 
         if (!byAccount[accountId]) {
           byAccount[accountId] = [];
         }
-        byAccount[accountId].push(tx);
+
+        // Build a clean transaction object with only valid fields for Actual Budget API
+        // Map transaction_id to imported_id for deduplication support
+        const cleanTx: any = {
+          date: tx.date,
+          amount: toMilliunits(tx.amount),
+        };
+        if (tx.payee_name) cleanTx.payee_name = tx.payee_name;
+        if (tx.payee) cleanTx.payee_name = tx.payee;
+        if (tx.notes) cleanTx.notes = tx.notes;
+        if (tx.category) cleanTx.category = tx.category;
+        if (tx.transaction_id != null) cleanTx.imported_id = String(tx.transaction_id);
+        if (tx.imported_id != null) cleanTx.imported_id = String(tx.imported_id);
+
+        byAccount[accountId].push(cleanTx);
       }
 
-      const allResults: string[] = [];
+      const allResults: any[] = [];
       for (const [accountId, txs] of Object.entries(byAccount)) {
-        dlog('addTransactions() sending', txs.length, 'transactions to account', accountId);
-        const resp = await actual.addTransactions(accountId, txs);
-        dlog('addTransactions() response', Array.isArray(resp) ? resp.length : typeof resp);
-        if (Array.isArray(resp)) {
-          allResults.push(...resp);
-        } else if (resp) {
-          allResults.push(resp);
+        if (useImport) {
+          // importTransactions handles deduplication via imported_id
+          dlog('importTransactions() sending', txs.length, 'transactions to account', accountId);
+          const resp = await actual.importTransactions(accountId, txs);
+          dlog('importTransactions() response', resp);
+          // importTransactions returns { added, updated } or similar structure
+          if (resp) {
+            allResults.push(resp);
+          }
+        } else {
+          // Fallback to addTransactions (no deduplication)
+          dlog('addTransactions() sending', txs.length, 'transactions to account', accountId);
+          const resp = await actual.addTransactions(accountId, txs);
+          dlog('addTransactions() response', Array.isArray(resp) ? resp.length : typeof resp);
+          if (Array.isArray(resp)) {
+            allResults.push(...resp);
+          } else if (resp) {
+            allResults.push(resp);
+          }
         }
       }
       return allResults;
