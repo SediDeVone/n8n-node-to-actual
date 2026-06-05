@@ -227,7 +227,11 @@ app.use(express.json());
 
 // Basic health endpoint that does not require Actual to be configured
 app.get('/health', (_req: Request, res: Response) => {
-  res.json({ ok: true });
+  res.json({
+    status: 'up',
+    version: ACTUAL_API_VERSION,
+    actualInitialized: initialized,
+  });
 });
 
 // GET /budgets → list budgets
