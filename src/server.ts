@@ -49,6 +49,29 @@ function redactUrl(url: string): string {
 
 let initialized = false;
 
+// Mutex to prevent concurrent budget operations
+// The Actual API doesn't support concurrent loadBudget/downloadBudget calls
+// as it throws "startServices called while services are already running"
+let budgetOperationLock: Promise<void> = Promise.resolve();
+
+async function withLock<T>(fn: () => Promise<T>): Promise<T> {
+  // Chain this operation after the current lock
+  const previousLock = budgetOperationLock;
+  let releaseLock: () => void;
+  budgetOperationLock = new Promise<void>((resolve) => {
+    releaseLock = resolve;
+  });
+  
+  // Wait for previous operation to complete
+  await previousLock;
+  
+  try {
+    return await fn();
+  } finally {
+    releaseLock!();
+  }
+}
+
 async function ensureInit() {
   if (initialized) return;
   if (!ACTUAL_SERVER_URL || !ACTUAL_PASSWORD) {
@@ -150,43 +173,47 @@ async function listBudgets(): Promise<Array<{ id: string; name: string }>> {
 }
 
 async function withBudget<T>(budgetId: string, fn: () => Promise<T>): Promise<T> {
-  await ensureInit();
-  
-  // The budgetId from getBudgets() is actually the syncId (remote file ID).
-  // We need to download the budget from the remote server first, which creates
-  // a local copy, then load it. The downloadBudget function handles this.
-  if (typeof actual.downloadBudget === 'function') {
-    dlog('Downloading budget from remote server:', budgetId);
-    await actual.downloadBudget(budgetId);
-    dlog('Budget downloaded successfully');
-    try {
-      return await fn();
-    } finally {
-      // Budget will be closed on shutdown
+  // Use lock to prevent concurrent budget operations which cause
+  // "startServices called while services are already running" error
+  return withLock(async () => {
+    await ensureInit();
+    
+    // The budgetId from getBudgets() is actually the syncId (remote file ID).
+    // We need to download the budget from the remote server first, which creates
+    // a local copy, then load it. The downloadBudget function handles this.
+    if (typeof actual.downloadBudget === 'function') {
+      dlog('Downloading budget from remote server:', budgetId);
+      await actual.downloadBudget(budgetId);
+      dlog('Budget downloaded successfully');
+      try {
+        return await fn();
+      } finally {
+        // Budget will be closed on shutdown
+      }
     }
-  }
-  
-  // Fallback methods for local budgets or older API versions
-  if (typeof actual.runWithBudget === 'function') {
-    return actual.runWithBudget(budgetId, fn);
-  }
-  if (typeof actual.openBudget === 'function') {
-    await actual.openBudget(budgetId);
-    try {
-      return await fn();
-    } finally {
-      // closed on shutdown
+    
+    // Fallback methods for local budgets or older API versions
+    if (typeof actual.runWithBudget === 'function') {
+      return actual.runWithBudget(budgetId, fn);
     }
-  }
-  if (typeof actual.loadBudget === 'function') {
-    await actual.loadBudget(budgetId);
-    try {
-      return await fn();
-    } finally {
-      // noop
+    if (typeof actual.openBudget === 'function') {
+      await actual.openBudget(budgetId);
+      try {
+        return await fn();
+      } finally {
+        // closed on shutdown
+      }
     }
-  }
-  throw Object.assign(new Error('No supported method to select budget'), { status: 500 });
+    if (typeof actual.loadBudget === 'function') {
+      await actual.loadBudget(budgetId);
+      try {
+        return await fn();
+      } finally {
+        // noop
+      }
+    }
+    throw Object.assign(new Error('No supported method to select budget'), { status: 500 });
+  });
 }
 
 function toMilliunits(amount: unknown): number {
